@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dyno ADB Helper</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: satu kolum mobile-first, kad tugas bertanda + dulang command melekat di bawah */
+:root{
+  --bg:#f3f5f7; --surface:#ffffff; --ink:#15212b; --muted:#5b6b78; --line:#d9e0e6;
+  --accent:#0b6e8a; --accent-ink:#ffffff; --term:#0f1a22; --term-ink:#d6f0f7;
+  --ok:#1d7a46; --warn:#a35a00; --ok-bg:#e3f4ea; --warn-bg:#fdf0dd;
+  --display:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0d151b; --surface:#15212a; --ink:#e4edf2; --muted:#93a5b2; --line:#26353f;
+  --accent:#3fb6d6; --accent-ink:#06222b; --term:#071015; --term-ink:#bfe9f5;
+  --ok:#5fd093; --warn:#f0a94a; --ok-bg:#163326; --warn-bg:#3a2a12; color-scheme:dark;}}
+:root[data-theme="dark"]{
+  --bg:#0d151b; --surface:#15212a; --ink:#e4edf2; --muted:#93a5b2; --line:#26353f;
+  --accent:#3fb6d6; --accent-ink:#06222b; --term:#071015; --term-ink:#bfe9f5;
+  --ok:#5fd093; --warn:#f0a94a; --ok-bg:#163326; --warn-bg:#3a2a12; color-scheme:dark;}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.5 var(--body);padding-bottom:230px}
+.wrap{max-width:640px;margin:0 auto;padding:20px 16px;display:flex;flex-direction:column;gap:18px}
+header h1{font:700 26px/1.15 var(--display);margin:0;text-wrap:balance}
+header p{margin:6px 0 0;color:var(--muted);font-size:15px}
+nav{position:sticky;top:0;z-index:5;background:var(--bg);padding:8px 0;display:flex;gap:6px;overflow-x:auto}
+nav a{flex:none;text-decoration:none;color:var(--ink);border:1px solid var(--line);background:var(--surface);padding:6px 12px;border-radius:999px;font-size:14px;font-weight:500}
+nav a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,label:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+section{display:flex;flex-direction:column;gap:10px;scroll-margin-top:56px}
+h2{font:600 19px/1.3 var(--display);margin:8px 0 0}
+.hint{color:var(--muted);font-size:14px;margin:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px}
+ol.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:15px}
+.task{display:flex;gap:12px;align-items:flex-start;cursor:pointer}
+.task input{width:20px;height:20px;margin-top:2px;accent-color:var(--accent);flex:none}
+.task .t{font-weight:600}
+.task .d{color:var(--muted);font-size:14px}
+code,.cmd{font-family:var(--mono);font-size:13px}
+.cmd{display:block;margin-top:6px;background:var(--term);color:var(--term-ink);padding:8px 10px;border-radius:6px;overflow-x:auto;white-space:pre}
+.list{display:flex;flex-direction:column;gap:8px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:6px 12px;border-radius:999px;font:500 14px var(--body);cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.pill{display:inline-block;font-size:12px;font-weight:600;padding:1px 8px;border-radius:999px;margin-left:6px;vertical-align:1px}
+.pill.ok{background:var(--ok-bg);color:var(--ok)}
+.pill.warn{background:var(--warn-bg);color:var(--warn)}
+.pkg{font-family:var(--mono);font-size:12px;color:var(--muted);word-break:break-all}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+button{font:600 14px var(--body);border-radius:8px;padding:9px 14px;cursor:pointer;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+textarea{width:100%;min-height:90px;font:13px/1.4 var(--mono);background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px}
+.empty{color:var(--muted);font-size:14px;font-style:italic}
+.tray{position:fixed;left:0;right:0;bottom:0;z-index:10;background:var(--term);color:var(--term-ink);border-top:2px solid var(--accent);padding:10px 16px calc(10px + env(safe-area-inset-bottom))}
+.tray .in{max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:8px}
+.tray .top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.tray strong{font-size:14px}
+.tray pre{margin:0;max-height:110px;overflow:auto;font:12px/1.45 var(--mono);white-space:pre}
+.tray button{padding:7px 12px}
+.toast{font-size:13px;color:var(--ok);min-height:1em}
+.note{border-left:3px solid var(--warn);padding:8px 12px;background:var(--warn-bg);border-radius:0 8px 8px 0;font-size:14px}
+@media (prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Dyno ADB Helper</h1>
+    <p>Tandakan tugas, copy semua command, paste dalam aShell. Tak perlu PC, tak perlu root.</p>
+  </header>
+
+  <nav aria-label="Bahagian">
+    <a href="#setup">1. Setup</a><a href="#laju">2. Laju</a><a href="#storage">3. Storage</a><a href="#bloat">4. Bloatware</a><a href="#pulih">5. Pulih</a>
+  </nav>
+
+  <section id="setup">
+    <h2>Setup sekali sahaja</h2>
+    <div class="card">
+      <ol class="steps">
+        <li>Settings › About phone › tekan <b>Build number</b> 7 kali untuk buka Developer options.</li>
+        <li>Developer options › hidupkan <b>Wireless debugging</b>. Phone kena sambung WiFi.</li>
+        <li>Pasang <b>Shizuku</b> dari Play Store › Start via Wireless debugging › ikut langkah pairing.</li>
+        <li>Pasang <b>aShell</b> dari Play Store › benarkan akses Shizuku.</li>
+        <li>Tandakan tugas di bawah › tekan <b>Copy semua</b> › paste dalam aShell › Enter.</li>
+      </ol>
+    </div>
+    <div class="note">Mula dengan bahagian Laju dan Storage dulu sebab dua-dua tu paling selamat. Untuk Bloatware, buang sikit-sikit dan simpan command Pulih.</div>
+  </section>
+
+  <section id="laju">
+    <h2>Laju</h2>
+    <div class="list" id="speedList"></div>
+  </section>
+
+  <section id="storage">
+    <h2>Storage</h2>
+    <div class="list" id="storageList"></div>
+  </section>
+
+  <section id="bloat">
+    <h2>Bloatware</h2>
+    <p class="hint">Pilih jenama phone. Nama package boleh berbeza ikut model. Kalau package tak wujud, aShell cuma tunjuk "not installed" dan tiada apa yang rosak.</p>
+    <div class="chips" id="brandChips" role="group" aria-label="Jenama"></div>
+    <div class="card" style="display:flex;flex-direction:column;gap:8px">
+      <label for="scanBox" style="font-weight:600;font-size:14px">Pilihan: tapis ikut app yang ada dalam phone</label>
+      <span class="hint">Jalankan <code>pm list packages</code> dalam aShell, copy hasilnya, paste kat sini. Senarai akan tunjuk app yang betul-betul ada sahaja.</span>
+      <textarea id="scanBox" placeholder="package:com.samsung.android.app.tips&#10;package:com.facebook.appmanager&#10;..."></textarea>
+      <div class="row"><button id="scanBtn" type="button">Tapis senarai</button><button id="scanClear" type="button">Kosongkan</button></div>
+      <span class="toast" id="scanMsg" aria-live="polite"></span>
+    </div>
+    <div class="row"><button id="selSafe" type="button">Tanda semua "Selamat"</button><button id="selNone" type="button">Nyahtanda semua</button></div>
+    <div class="list" id="bloatList"></div>
+  </section>
+
+  <section id="pulih">
+    <h2>Pulih (simpan ni)</h2>
+    <p class="hint">Kalau ada fungsi hilang lepas buang app, paste command ni dalam aShell untuk pulihkan app yang Bob tanda, dan set animasi balik ke asal.</p>
+    <span class="cmd" id="restoreOut"></span>
+    <div class="row"><button class="primary" id="copyRestore" type="button">Copy command pulih</button></div>
+    <span class="toast" id="restoreMsg" aria-live="polite"></span>
+  </section>
+</div>
+
+<div class="tray" role="region" aria-label="Command terpilih">
+  <div class="in">
+    <div class="top"><strong id="trayCount">0 command</strong>
+      <div class="row"><button type="button" id="clearAll">Kosongkan</button><button type="button" class="primary" id="copyAll">Copy semua</button></div>
+    </div>
+    <pre id="trayOut"></pre>
+    <span class="toast" id="trayMsg" aria-live="polite"></span>
+  </div>
+</div>
+
+<script>
+const ANIM = k => ["window_animation_scale","transition_animation_scale","animator_duration_scale"].map(s=>`settings put global ${s} ${k}`).join("\n");
+const SPEED = [
+  {id:"anim05",t:"Animasi 0.5x",d:"Buka app dan tukar skrin terasa 2x laju. Paling ketara, paling selamat.",cmd:ANIM("0.5"),def:true},
+  {id:"anim0",t:"Animasi off",d:"Paling laju, tapi transisi jadi kasar. Pilih ni atau 0.5x, jangan dua-dua.",cmd:ANIM("0")},
+  {id:"dexopt",t:"Optimumkan semua app",d:"Compile semula app supaya buka lebih laju. Ambil masa 5-20 minit, biar sampai siap.",cmd:"cmd package bg-dexopt-job"},
+  {id:"kill",t:"Tutup app background",d:"Lega RAM sekejap. App akan buka balik bila perlu.",cmd:"am kill-all"}
+];
+const STORAGE = [
+  {id:"trim",t:"Buang cache semua app",d:"Selamat. Biasanya dapat balik ratusan MB sampai beberapa GB.",cmd:"pm trim-caches 999G",def:true},
+  {id:"du",t:"Tengok folder paling besar",d:"Senarai folder dalam storage ikut saiz, yang paling besar di bawah. Untuk semak sahaja, tiada fail dibuang.",cmd:"du -sh /sdcard/* 2>/dev/null | sort -h"},
+  {id:"df",t:"Baki storage",d:"Tunjuk ruang terpakai dan yang masih kosong.",cmd:"df -h /data"}
+];
+const B = (p,n,safe,d)=>({p,n,safe,d});
+const BLOAT = {
+  "Samsung":[
+    B("com.samsung.android.app.tips","Tips",1),
+    B("com.samsung.android.arzone","AR Zone",1),
+    B("com.samsung.android.aremoji","AR Emoji",1),
+    B("com.samsung.android.visionintelligence","Bixby Vision",1),
+    B("com.samsung.android.bixby.agent","Bixby Voice",0,"Butang sisi mungkin perlu set semula"),
+    B("com.samsung.android.bixby.wakeup","Bixby wake-up",1),
+    B("com.samsung.android.app.spage","Samsung Free",1),
+    B("com.samsung.android.kidsinstaller","Samsung Kids",1),
+    B("com.microsoft.skydrive","OneDrive",1),
+    B("com.netflix.partner.activation","Netflix activation",1),
+    B("com.samsung.android.game.gamehome","Game Launcher",0,"Hilang Game Booster"),
+    B("com.sec.android.app.sbrowser","Samsung Internet",0,"Buang hanya kalau guna Chrome")
+  ],
+  "Xiaomi / Redmi / POCO":[
+    B("com.miui.analytics","MIUI Analytics",1),
+    B("com.miui.daemon","MIUI Daemon (data usage)",1),
+    B("com.miui.msa.global","MSA (iklan sistem)",0,"Kurangkan iklan; uji dulu"),
+    B("com.miui.hybrid","Quick Apps",1),
+    B("com.miui.yellowpage","Yellow Pages",1),
+    B("com.miui.bugreport","Bug Report",1),
+    B("com.xiaomi.glgm","Games",1),
+    B("com.miui.videoplayer","Mi Video",1),
+    B("com.miui.player","Mi Music",1),
+    B("com.mi.globalbrowser","Mi Browser",0,"Buang hanya kalau guna Chrome"),
+    B("com.miui.android.fashiongallery","Wallpaper Carousel",1),
+    B("com.xiaomi.mipicks","GetApps",0,"Update app sistem Xiaomi guna ni")
+  ],
+  "Oppo / Realme":[
+    B("com.heytap.pictorial","Lock screen magazine",1),
+    B("com.opos.ads","Iklan sistem",0,"Uji dulu"),
+    B("com.heytap.browser","Browser",0,"Buang hanya kalau guna Chrome"),
+    B("com.coloros.gamespaceui","Game Space",0,"Hilang mod gaming"),
+    B("com.heytap.market","App Market",0,"Update app sistem guna ni"),
+    B("com.heytap.cloud","HeyTap Cloud",0,"Hilang backup cloud jenama")
+  ],
+  "Vivo":[
+    B("com.vivo.browser","Vivo Browser",0,"Buang hanya kalau guna Chrome"),
+    B("com.vivo.appstore","V-Appstore",0,"Update app sistem guna ni"),
+    B("com.bbk.theme","Themes",0,"Tak boleh tukar tema")
+  ],
+  "Facebook (semua jenama)":[
+    B("com.facebook.appmanager","Facebook App Manager",1),
+    B("com.facebook.services","Facebook Services",1),
+    B("com.facebook.system","Facebook App Installer",1)
+  ],
+  "Google (semua jenama)":[
+    B("com.google.android.apps.youtube.music","YouTube Music",1),
+    B("com.google.android.videos","Google TV",1),
+    B("com.google.android.apps.magazines","Google News",1),
+    B("com.google.android.apps.podcasts","Google Podcasts",1),
+    B("com.google.android.apps.tachyon","Google Meet (Duo)",0,"Panggilan video dari dialer hilang"),
+    B("com.google.android.feedback","Google Feedback",1),
+    B("com.google.android.apps.wellbeing","Digital Wellbeing",0,"Hilang screen time & bedtime mode")
+  ]
+};
+
+const store = {get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+const picked = new Set(store.get("dah_tasks",[...SPEED,...STORAGE].filter(x=>x.def).map(x=>x.id)));
+const bloatPicked = new Set(store.get("dah_bloat",[]));
+let brand = store.get("dah_brand","Samsung");
+if(!BLOAT[brand])brand="Samsung";
+let present = null;
+
+function taskEl(x){
+  const l=document.createElement("label");l.className="card task";l.htmlFor="t_"+x.id;
+  l.innerHTML=`<input type="checkbox" id="t_${x.id}"><div><div class="t"></div><div class="d"></div><span class="cmd"></span></div>`;
+  l.querySelector(".t").textContent=x.t;l.querySelector(".d").textContent=x.d;l.querySelector(".cmd").textContent=x.cmd;
+  const cb=l.querySelector("input");cb.checked=picked.has(x.id);
+  cb.addEventListener("change",()=>{
+    if(cb.checked){picked.add(x.id);if(x.id==="anim05")uncheck("anim0");if(x.id==="anim0")uncheck("anim05");}else picked.delete(x.id);
+    render();
+  });
+  return l;
+}
+function uncheck(id){picked.delete(id);const c=document.getElementById("t_"+id);if(c)c.checked=false}
+SPEED.forEach(x=>speedList.appendChild(taskEl(x)));
+STORAGE.forEach(x=>storageList.appendChild(taskEl(x)));
+
+function drawChips(){
+  brandChips.innerHTML="";
+  Object.keys(BLOAT).forEach(b=>{
+    const c=document.createElement("button");c.type="button";c.className="chip";c.textContent=b;
+    c.setAttribute("aria-pressed",b===brand);c.onclick=()=>{brand=b;store.set("dah_brand",b);drawChips();drawBloat()};
+    brandChips.appendChild(c);
+  });
+}
+function visibleBloat(){return BLOAT[brand].filter(x=>!present||present.has(x.p))}
+function drawBloat(){
+  bloatList.innerHTML="";
+  const items=visibleBloat();
+  if(!items.length){bloatList.innerHTML=`<p class="empty">Tiada app dalam senarai ${brand} yang ada dalam phone ni. Cuba jenama lain, atau kosongkan tapisan.</p>`;return}
+  items.forEach(x=>{
+    const id="b_"+x.p.replace(/\W/g,"_");
+    const l=document.createElement("label");l.className="card task";l.htmlFor=id;
+    l.innerHTML=`<input type="checkbox" id="${id}"><div><div class="t"></div><div class="d"></div><div class="pkg"></div></div>`;
+    const t=l.querySelector(".t");t.textContent=x.n;
+    const pill=document.createElement("span");pill.className="pill "+(x.safe?"ok":"warn");pill.textContent=x.safe?"Selamat":"Hati-hati";t.appendChild(pill);
+    l.querySelector(".d").textContent=x.d||"Tiada kesan pada fungsi asas phone.";
+    l.querySelector(".pkg").textContent=x.p;
+    const cb=l.querySelector("input");cb.checked=bloatPicked.has(x.p);
+    cb.onchange=()=>{cb.checked?bloatPicked.add(x.p):bloatPicked.delete(x.p);render()};
+    bloatList.appendChild(l);
+  });
+}
+
+function allTasks(){return [...SPEED,...STORAGE]}
+function trayText(){
+  const lines=[];
+  allTasks().forEach(x=>{if(picked.has(x.id))lines.push("# "+x.t,x.cmd)});
+  if(bloatPicked.size){lines.push("# Buang bloatware");bloatPicked.forEach(p=>lines.push("pm uninstall --user 0 "+p))}
+  return lines.join("\n");
+}
+function restoreText(){
+  const lines=["# Animasi balik normal",ANIM("1")];
+  if(bloatPicked.size){lines.push("# Pulihkan app");bloatPicked.forEach(p=>lines.push("cmd package install-existing "+p))}
+  return lines.join("\n");
+}
+function render(){
+  store.set("dah_tasks",[...picked]);store.set("dah_bloat",[...bloatPicked]);
+  const n=allTasks().filter(x=>picked.has(x.id)).reduce((a,x)=>a+x.cmd.split("\n").length,0)+bloatPicked.size;
+  trayCount.textContent=n+" command";
+  trayOut.textContent=trayText()||"Tandakan tugas di atas.";
+  restoreOut.textContent=restoreText();
+}
+
+async function copy(text,msgEl){
+  let ok=false;
+  try{await navigator.clipboard.writeText(text);ok=true}catch(e){
+    try{const t=document.createElement("textarea");t.value=text;document.body.appendChild(t);t.select();ok=document.execCommand("copy");t.remove()}catch(e2){}
+  }
+  msgEl.textContent=ok?"Dah copy. Paste dalam aShell.":"Copy tak jalan. Tekan lama pada teks dan copy manual.";
+  setTimeout(()=>msgEl.textContent="",3500);
+}
+copyAll.onclick=()=>{const t=trayText();if(!t){trayMsg.textContent="Belum ada tugas ditanda.";return}copy(t,trayMsg)};
+copyRestore.onclick=()=>copy(restoreText(),restoreMsg);
+clearAll.onclick=()=>{picked.clear();bloatPicked.clear();document.querySelectorAll(".task input").forEach(c=>c.checked=false);render()};
+selSafe.onclick=()=>{visibleBloat().filter(x=>x.safe).forEach(x=>bloatPicked.add(x.p));drawBloat();render()};
+selNone.onclick=()=>{BLOAT[brand].forEach(x=>bloatPicked.delete(x.p));drawBloat();render()};
+scanBtn.onclick=()=>{
+  const found=new Set((scanBox.value.match(/package:([\w.]+)/g)||[]).map(s=>s.slice(8)));
+  if(!found.size){scanMsg.textContent="Tak jumpa baris 'package:...'. Pastikan paste hasil pm list packages.";return}
+  present=found;
+  const hits=Object.entries(BLOAT).map(([b,l])=>[b,l.filter(x=>found.has(x.p)).length]).filter(x=>x[1]);
+  if(hits.length&&!hits.some(h=>h[0]===brand)){brand=hits[0][0];drawChips()}
+  scanMsg.textContent=`${found.size} app dibaca. Jumpa: `+(hits.map(h=>`${h[0]} (${h[1]})`).join(", ")||"tiada bloatware dalam senarai");
+  drawBloat();
+};
+scanClear.onclick=()=>{scanBox.value="";present=null;scanMsg.textContent="";drawBloat()};
+
+drawChips();drawBloat();render();
+</script>
+</body>
+</html>
